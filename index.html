@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- No network access at all: the page can only run its own inline script. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>HFS|boot</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:34em;margin:3em auto;padding:0 1em;color:#ddd;background:#14171c}</style>
+</head>
+<body>
+<p><b>HUD Fit storage bridge.</b> The HUD Fit mod for Deadlock loads this page inside the game's hidden
+browser to keep your HUD layouts in that browser's local storage, on your own PC. The page sends nothing
+anywhere and has no network access.</p>
+<script>
+// Protocol: the game sets this page's URL to  #<id>|<command>|<argument>
+//   len            -> title HFS|len|<id>|<hex length>|<time>   (and keeps the hex for chunk reads)
+//   chunk|<n>      -> title HFS|chunk|<id>|<n>|<3800 hex chars>|<time>
+//   put|<hex>      -> stores the text, title HFS|saved|<id>|<length>|<time>
+// Errors answer HFS|err|<id>|<message>|<time>. Data is hex so URL handling can't damage it.
+(function () {
+    var KEY = "hudfit_v1", CHUNK = 3800, held = "";
+    function hex(s) { var h = ""; for (var i = 0; i < s.length; i++) h += ("0" + s.charCodeAt(i).toString(16)).slice(-2); return h; }
+    function unhex(h) { var s = ""; for (var i = 0; i + 1 < h.length; i += 2) s += String.fromCharCode(parseInt(h.substr(i, 2), 16)); return s; }
+    function say(t) { document.title = "HFS|" + t + "|" + Date.now(); }
+    function run() {
+        var m = location.hash.slice(1).split("|"), id = m[0], cmd = m[1];
+        try {
+            if (cmd === "len") { held = hex(localStorage.getItem(KEY) || ""); say("len|" + id + "|" + held.length); }
+            else if (cmd === "chunk") { var n = +m[2]; say("chunk|" + id + "|" + n + "|" + held.substr(n * CHUNK, CHUNK)); }
+            else if (cmd === "put") { var s = unhex(m[2] || ""); localStorage.setItem(KEY, s); say("saved|" + id + "|" + s.length); }
+        } catch (e) { say("err|" + id + "|" + String(e && e.message || e).replace(/\|/g, "/")); }
+    }
+    window.addEventListener("hashchange", run);
+    try { localStorage.setItem("hfs_probe", "1"); localStorage.removeItem("hfs_probe"); say("ready|0|ok"); }
+    catch (e) { say("ready|0|no storage: " + String(e && e.message || e).replace(/\|/g, "/")); }
+    if (location.hash) run();
+})();
+</script>
+</body>
+</html>
